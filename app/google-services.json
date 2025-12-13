@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "409262438941",
+    "project_id": "thigiuaki-a2c60",
+    "storage_bucket": "thigiuaki-a2c60.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:409262438941:android:8f72a7dc0df2cf1de964f4",
+        "android_client_info": {
+          "package_name": "com.example.thigiuaki"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "409262438941-msji785jam29dj195gofcqgmd298s5u2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDmpG0ZuLaY46pcdlrcO4gdqdRUy6psJGI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "409262438941-msji785jam29dj195gofcqgmd298s5u2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
