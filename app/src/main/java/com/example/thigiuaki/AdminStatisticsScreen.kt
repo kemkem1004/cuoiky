@@ -9,8 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
-import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -21,16 +21,18 @@ fun AdminStatisticsScreen() {
     var monthlyRevenue by remember { mutableStateOf(0.0) }
     var totalOrders by remember { mutableStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
-    
+
     LaunchedEffect(Unit) {
+        // --- 1. Thiết lập khoảng thời gian ---
         val today = Calendar.getInstance().apply {
+            time = Date()
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val todayStart = com.google.firebase.Timestamp(today.time)
-        
+        val todayStart = Timestamp(today.time)
+
         val monthStart = Calendar.getInstance().apply {
             set(Calendar.DAY_OF_MONTH, 1)
             set(Calendar.HOUR_OF_DAY, 0)
@@ -38,39 +40,50 @@ fun AdminStatisticsScreen() {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val monthStartTimestamp = com.google.firebase.Timestamp(monthStart.time)
-        
-        // Daily revenue
+        val monthStartTimestamp = Timestamp(monthStart.time)
+
+        // --- 2. Daily revenue (Truy vấn cần INDEX) ---
         db.collection("orders")
             .whereGreaterThanOrEqualTo("createdAt", todayStart)
             .whereEqualTo("status", "delivered")
             .get()
             .addOnSuccessListener { snapshot ->
                 dailyRevenue = snapshot.documents.sumOf { doc ->
-                    (doc.getDouble("totalAmount") ?: 0.0)
+                    // Đã xác nhận: Dựa vào totalAmount (kiểu number trong Firestore)
+                    doc.getDouble("totalAmount") ?: 0.0
                 }
             }
-        
-        // Monthly revenue
+            .addOnFailureListener { e ->
+                Log.e("AdminStats", "Error fetching daily revenue (CHECK INDEXES): ${e.message}")
+            }
+
+        // --- 3. Monthly revenue (Truy vấn cần INDEX) ---
         db.collection("orders")
             .whereGreaterThanOrEqualTo("createdAt", monthStartTimestamp)
             .whereEqualTo("status", "delivered")
             .get()
             .addOnSuccessListener { snapshot ->
                 monthlyRevenue = snapshot.documents.sumOf { doc ->
-                    (doc.getDouble("totalAmount") ?: 0.0)
+                    doc.getDouble("totalAmount") ?: 0.0
                 }
             }
-        
-        // Total orders
+            .addOnFailureListener { e ->
+                Log.e("AdminStats", "Error fetching monthly revenue (CHECK INDEXES): ${e.message}")
+            }
+
+        // --- 4. Total orders ---
         db.collection("orders")
             .get()
             .addOnSuccessListener { snapshot ->
                 totalOrders = snapshot.size()
                 isLoading = false
             }
+            .addOnFailureListener { e ->
+                Log.e("AdminStats", "Error fetching total orders: ${e.message}")
+                isLoading = false
+            }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -95,16 +108,16 @@ fun AdminStatisticsScreen() {
             } else {
                 StatisticCard(
                     title = "Doanh thu hôm nay",
-                    value = "${dailyRevenue.toInt()} VND",
+                    value = "${dailyRevenue.toLong()} VND",
                     icon = Icons.Default.Today
                 )
-                
+
                 StatisticCard(
                     title = "Doanh thu tháng này",
-                    value = "${monthlyRevenue.toInt()} VND",
+                    value = "${monthlyRevenue.toLong()} VND",
                     icon = Icons.Default.CalendarMonth
                 )
-                
+
                 StatisticCard(
                     title = "Tổng số đơn hàng",
                     value = "$totalOrders đơn",
@@ -154,4 +167,3 @@ fun StatisticCard(
         }
     }
 }
-
