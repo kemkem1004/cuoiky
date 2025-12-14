@@ -34,9 +34,12 @@ fun CustomerMessageScreen(userId: String) {
             .addSnapshotListener { snapshot, _ ->
                 val all = snapshot?.documents?.mapNotNull { it.toObject(Message::class.java)?.copy(id = it.id) } ?: emptyList()
                 messages = all.filter { msg ->
-                    (msg.senderRole == "user" && msg.receiverId == "admin") ||
-                            (msg.senderRole == "admin" && msg.receiverId == userId)
+                    // user gửi cho admin
+                    (msg.senderId == userId && msg.receiverId == "admin") ||
+                            // admin gửi cho user
+                    (msg.senderRole == "admin" && msg.receiverId == userId)
                 }.sortedBy { it.createdAt }
+
 
                 all.filter { it.receiverId == userId && it.read == false }.forEach { msg ->
                     db.collection("messages").document(msg.id).update("read", true)

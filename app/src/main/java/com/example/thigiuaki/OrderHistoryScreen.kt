@@ -173,32 +173,25 @@ fun OrderHistoryScreen() {
                         onClick = {
                             val user = auth.currentUser
                             if (user != null && selectedOrder != null) {
-                                // Kiểm tra xem đã có review chưa
-                                val existingReview = reviews.find { it.orderId == selectedOrder!!.id }
-                                if (existingReview != null) {
-                                    // Cập nhật review
-                                    db.collection("reviews").document(existingReview.id!!)
-                                        .update(
-                                            mapOf(
-                                                "comment" to reviewText,
-                                                "rating" to rating,
-                                                "createdAt" to Timestamp.now()
-                                            )
+
+                                db.collection("users").document(user.uid).get()
+                                    .addOnSuccessListener { userDoc ->
+                                        val userName = userDoc.getString("name") ?: "Người dùng"
+
+                                        val review = hashMapOf(
+                                            "userId" to user.uid,
+                                            "userName" to userName,
+                                            "orderId" to selectedOrder!!.id,
+                                            "comment" to reviewText,
+                                            "rating" to rating,
+                                            "createdAt" to Timestamp.now(),
+                                            "adminReply" to null
                                         )
-                                } else {
-                                    // Tạo mới review
-                                    val review = hashMapOf(
-                                        "userId" to user.uid,
-                                        "userName" to (user.displayName ?: "Người dùng"),
-                                        "orderId" to selectedOrder!!.id,
-                                        "comment" to reviewText,
-                                        "rating" to rating,
-                                        "createdAt" to Timestamp.now(),
-                                        "adminReply" to null
-                                    )
-                                    db.collection("reviews").add(review)
-                                }
+
+                                        db.collection("reviews").add(review)
+                                    }
                             }
+
                             showReviewDialog = false
                         },
                         enabled = reviewText.isNotBlank()
