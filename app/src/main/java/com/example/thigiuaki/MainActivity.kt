@@ -256,9 +256,7 @@ fun ThigiuakiApp() {
                 )
 
                 is Screen.OrderHistory -> OrderHistoryScreen(
-                    onNavigateToMessage = { orderId, otherUserId, otherUserName ->
-                        currentScreen = Screen.Message(orderId, otherUserId, otherUserName)
-                    }
+
                 )
 
                 is Screen.Message -> {
