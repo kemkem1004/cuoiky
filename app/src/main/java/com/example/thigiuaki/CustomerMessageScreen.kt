@@ -42,11 +42,21 @@ fun CustomerMessageScreen(userId: String) {
             .addSnapshotListener { snapshot, _ ->
                 val all = snapshot?.documents?.mapNotNull { it.toObject(Message::class.java)?.copy(id = it.id) } ?: emptyList()
                 messages = all.filter { msg ->
+<<<<<<< HEAD
                     (msg.senderId == userId && msg.receiverId == "admin") ||
                             (msg.senderRole == "admin" && msg.receiverId == userId)
                 }.sortedBy { it.createdAt }
 
                 // Đánh dấu đã đọc
+=======
+                    // user gửi cho admin
+                    (msg.senderId == userId && msg.receiverId == "admin") ||
+                            // admin gửi cho user
+                    (msg.senderRole == "admin" && msg.receiverId == userId)
+                }.sortedBy { it.createdAt }
+
+
+>>>>>>> 23325b262afeb1d4d24482e8f92d4ac8fab80dc0
                 all.filter { it.receiverId == userId && it.read == false }.forEach { msg ->
                     db.collection("messages").document(msg.id).update("read", true)
                 }

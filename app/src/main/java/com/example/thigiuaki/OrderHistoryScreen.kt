@@ -223,6 +223,7 @@ fun OrderHistoryScreen() {
                         onClick = {
                             val user = auth.currentUser
                             if (user != null && selectedOrder != null) {
+<<<<<<< HEAD
                                 db.collection("users").document(user.uid).get()
                                     .addOnSuccessListener { userDoc ->
                                         val userName = userDoc.getString("name") ?: "Người dùng"
@@ -246,8 +247,27 @@ fun OrderHistoryScreen() {
                                             // Thêm mới
                                             db.collection("reviews").add(reviewData)
                                         }
+=======
+
+                                db.collection("users").document(user.uid).get()
+                                    .addOnSuccessListener { userDoc ->
+                                        val userName = userDoc.getString("name") ?: "Người dùng"
+
+                                        val review = hashMapOf(
+                                            "userId" to user.uid,
+                                            "userName" to userName,
+                                            "orderId" to selectedOrder!!.id,
+                                            "comment" to reviewText,
+                                            "rating" to rating,
+                                            "createdAt" to Timestamp.now(),
+                                            "adminReply" to null
+                                        )
+
+                                        db.collection("reviews").add(review)
+>>>>>>> 23325b262afeb1d4d24482e8f92d4ac8fab80dc0
                                     }
                             }
+
                             showReviewDialog = false
                         },
                         enabled = reviewText.isNotBlank(),
