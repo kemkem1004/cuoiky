@@ -74,7 +74,7 @@ fun AdminScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Trang quản lý doanh thu") },
+                title = { Text("Trang quản lý") },
                 actions = {
                     IconButton(onClick = onLogout) {
                         Icon(Icons.Default.ExitToApp, contentDescription = "Đăng xuất")

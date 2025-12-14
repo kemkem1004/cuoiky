@@ -11,6 +11,6 @@ data class Message(
     var receiverId: String = "",
     var content: String = "",
     var createdAt: Timestamp? = null,
-    var isRead: Boolean = false
+    var read: Boolean = false
 )
 

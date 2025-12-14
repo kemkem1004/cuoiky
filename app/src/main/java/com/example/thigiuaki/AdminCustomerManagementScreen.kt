@@ -27,43 +27,48 @@ fun AdminCustomerManagementScreen() {
     val auth = FirebaseAuth.getInstance()
     val adminId = auth.currentUser?.uid ?: ""
 
-    var customers by remember { mutableStateOf(listOf<User>()) }
+    var customers by remember { mutableStateOf(listOf<User>()) } // khách từ collection users
     var isLoading by remember { mutableStateOf(true) }
-    var unreadMap by remember { mutableStateOf(mapOf<String, Int>()) } // Lưu số tin chưa rep của từng khách
-
+    var unreadMap by remember { mutableStateOf(mapOf<String, Int>()) } // số tin chưa rep theo customerId
     var currentChatCustomer by remember { mutableStateOf<User?>(null) }
 
+    // 1. Fetch danh sách khách 1 lần
     LaunchedEffect(Unit) {
-        // Lấy danh sách khách
         db.collection("users")
             .whereEqualTo("role", "user")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e("AdminCustomers", "Error: ${error.message}")
-                    isLoading = false
-                    return@addSnapshotListener
-                }
-                val list = snapshot?.documents?.mapNotNull { doc ->
-                    val user = doc.toObject<User>()
-                    user?.copy(id = doc.id)
-                } ?: emptyList()
-                customers = list
+            .get()
+            .addOnSuccessListener { snap ->
+                customers = snap.documents.mapNotNull { it.toObject<User>()?.copy(id = it.id) }
                 isLoading = false
-
-                // Lấy số tin chưa rep cho từng khách
-                list.forEach { customer ->
-                    db.collection("messages")
-                        .whereEqualTo("senderId", customer.id)
-                        .whereEqualTo("receiverId", adminId)
-                        .whereEqualTo("isRead", false)
-                        .get()
-                        .addOnSuccessListener { snap ->
-                            unreadMap = unreadMap.toMutableMap().apply {
-                                put(customer.id, snap.size())
-                            }
-                        }
-                }
             }
+            .addOnFailureListener { e ->
+                Log.e("AdminCustomer", "Fetch users error: ${e.message}")
+                isLoading = false
+            }
+    }
+
+    // 2. Lắng nghe tin nhắn chưa đọc, cập nhật unreadMap
+    LaunchedEffect(Unit) {
+        db.collection("messages")
+            .whereEqualTo("receiverId", adminId)
+            .whereEqualTo("read", false)
+            .addSnapshotListener { snapshot, _ ->
+                val newUnreadMap = mutableMapOf<String, Int>()
+                snapshot?.documents?.forEach { doc ->
+                    val msg = doc.toObject<Message>() ?: return@forEach
+                    newUnreadMap[msg.senderId] = (newUnreadMap[msg.senderId] ?: 0) + 1
+                }
+                unreadMap = newUnreadMap
+            }
+    }
+
+    // 3. Kết hợp danh sách khách: customers + khách mới nhắn nhưng chưa có trong users
+    val displayCustomers = remember(customers, unreadMap) {
+        val newIds = unreadMap.keys.filter { id -> customers.none { it.id == id } }
+        val newCustomers = newIds.map { id ->
+            User(id = id, name = "Khách mới", email = "", phone = "")
+        }
+        (customers + newCustomers).distinctBy { it.id }
     }
 
     if (currentChatCustomer != null) {
@@ -81,7 +86,7 @@ fun AdminCustomerManagementScreen() {
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) { CircularProgressIndicator() }
-        } else if (customers.isEmpty()) {
+        } else if (displayCustomers.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -96,8 +101,7 @@ fun AdminCustomerManagementScreen() {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Sắp xếp khách theo số tin chưa rep giảm dần
-                val sortedCustomers = customers.sortedByDescending { unreadMap[it.id] ?: 0 }
+                val sortedCustomers = displayCustomers.sortedByDescending { unreadMap[it.id] ?: 0 }
                 items(sortedCustomers) { customer ->
                     AdminCustomerCard(
                         customer = customer,
@@ -114,6 +118,126 @@ fun AdminCustomerManagementScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdminChatScreen(customer: User, onBack: () -> Unit) {
+    val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val adminId = auth.currentUser?.uid ?: ""
+    var messages by remember { mutableStateOf(listOf<Message>()) }
+    var messageText by remember { mutableStateOf("") }
+
+    fun Timestamp?.formatToString(format: String = "HH:mm dd/MM/yyyy"): String {
+        return if (this != null) {
+            try {
+                val sdf = SimpleDateFormat(format, Locale.getDefault())
+                sdf.format(this.toDate())
+            } catch (_: Exception) {
+                ""
+            }
+        } else ""
+    }
+
+    // Lắng nghe tất cả tin nhắn liên quan customer
+    LaunchedEffect(customer.id) {
+        db.collection("messages")
+            .orderBy("createdAt")
+            .addSnapshotListener { snapshot, _ ->
+                val allMessages = snapshot?.documents?.mapNotNull { it.toObject<Message>() } ?: emptyList()
+                messages = allMessages.filter { msg ->
+                    // Tin nhắn user gửi (receiverId = "admin")
+                    (msg.senderId == customer.id && msg.receiverId == "admin") ||
+// Tin nhắn admin gửi cho user
+                            (msg.receiverId == customer.id)
+                }.sortedBy { it.createdAt }
+            }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(customer.name.ifBlank { "Chưa có tên" }) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+                }
+            )
+        },
+        bottomBar = {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Nhập tin nhắn...") }
+                )
+                Button(
+                    onClick = {
+                        if (messageText.isNotBlank()) {
+                            val message = hashMapOf(
+                                "content" to messageText,
+                                "createdAt" to Timestamp.now(),
+                                "read" to false,
+                                "senderId" to adminId,
+                                "senderName" to (auth.currentUser?.displayName ?: "Admin"),
+                                "senderRole" to "admin",
+                                "receiverId" to customer.id, // gửi về customer
+                                "orderId" to ""
+                            )
+                            db.collection("messages").add(message)
+                            messageText = ""
+                        }
+                    }
+                ) { Text("Gửi") }
+            }
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(messages) { msg ->
+                val isAdmin = msg.senderRole == "admin"
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Hiển thị ngày giờ
+                    Text(
+                        text = msg.createdAt.formatToString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = if (isAdmin) Arrangement.End else Arrangement.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Text(
+                                msg.content,
+                                color = if (isAdmin) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+        }
+    }
+}
+
+
+
 @Composable
 fun AdminCustomerCard(
     customer: User,
@@ -122,14 +246,29 @@ fun AdminCustomerCard(
     onMessageClick: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val adminId = auth.currentUser?.uid ?: ""
     var orderCount by remember { mutableStateOf(0) }
     var showBlockDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(customer.id) {
+        // Lấy số đơn hàng
         db.collection("orders")
             .whereEqualTo("userId", customer.id)
             .get()
             .addOnSuccessListener { snapshot -> orderCount = snapshot.size() }
+
+        // Đánh dấu tất cả tin chưa đọc là đã đọc
+        db.collection("messages")
+            .whereEqualTo("senderId", customer.id)
+            .whereEqualTo("receiverId", adminId)
+            .whereEqualTo("read", false)
+            .get()
+            .addOnSuccessListener { snap ->
+                snap.documents.forEach { doc ->
+                    db.collection("messages").document(doc.id).update("read", true)
+                }
+            }
     }
 
     Card(
@@ -184,121 +323,5 @@ fun AdminCustomerCard(
                 TextButton(onClick = { showBlockDialog = false }) { Text("Hủy") }
             }
         )
-    }
-}
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AdminChatScreen(customer: User, onBack: () -> Unit) {
-    val db = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val adminId = auth.currentUser?.uid ?: ""
-    var messages by remember { mutableStateOf(listOf<Message>()) }
-    var messageText by remember { mutableStateOf("") }
-
-    fun Timestamp?.formatToString(format: String = "HH:mm dd/MM/yyyy"): String {
-        return if (this != null) {
-            try {
-                val sdf = SimpleDateFormat(format, Locale.getDefault())
-                sdf.format(this.toDate())
-            } catch (_: Exception) {
-                ""
-            }
-        } else ""
-    }
-
-    LaunchedEffect(customer.id) {
-        db.collection("messages")
-            .whereIn("senderId", listOf(adminId, customer.id))
-            .addSnapshotListener { snapshot, _ ->
-                val allMessages = snapshot?.documents?.mapNotNull { it.toObject<Message>() } ?: emptyList()
-                messages = allMessages.filter {
-                    (it.senderId == adminId && it.receiverId == customer.id) ||
-                            (it.senderId == customer.id && it.receiverId == adminId)
-                }.sortedBy { it.createdAt } // mới nhất trên cùng
-            }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(customer.name.ifBlank { "Chưa có tên" }) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-                }
-            )
-        },
-        bottomBar = {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TextField(
-                    value = messageText,
-                    onValueChange = { messageText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Nhập tin nhắn...") }
-                )
-                Button(
-                    onClick = {
-                        if (messageText.isNotBlank()) {
-                            val message = hashMapOf(
-                                "content" to messageText,
-                                "createdAt" to Timestamp.now(),
-                                "isRead" to false,
-                                "senderId" to adminId,
-                                "senderName" to (auth.currentUser?.displayName ?: "Admin"),
-                                "senderRole" to "admin",
-                                "receiverId" to customer.id,
-                                "orderId" to ""
-                            )
-                            db.collection("messages").add(message)
-                            messageText = ""
-                        }
-                    }
-                ) { Text("Gửi") }
-            }
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            items(messages) { msg ->
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // Hiển thị ngày giờ phía trên tin nhắn
-                    Text(
-                        text = msg.createdAt.formatToString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    // Bong bóng chat
-                    Row(
-                        horizontalArrangement = if (msg.senderRole == "admin") Arrangement.End else Arrangement.Start,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (msg.senderRole == "admin") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(4.dp)
-                        ) {
-                            Text(
-                                msg.content,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-            }
-        }
     }
 }
