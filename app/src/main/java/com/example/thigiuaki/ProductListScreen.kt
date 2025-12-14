@@ -1,24 +1,53 @@
-package com.example.thigiuaki
+package com.example.thigiuaki.ui.screens
 
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.example.thigiuaki.model.Product
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
+import com.google.firebase.Timestamp
 
+// ********** THÊM CÁC IMPORTS CẦN THIẾT CHO MATERIAL 3 **********
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.draw.clip
+
+// ***************************************************************
+
+// =================================================================
+// 1. ĐỊNH NGHĨA MÀU SẮC (Clean Retail Design)
+// =================================================================
+private val BackgroundLight = Color(0xFFFAF9F6)
+private val PrimaryMaroon = Color(0xFF8D021F)
+private val SecondaryDark = Color(0xFF424242)
+private val CardBackground = Color.White
+private val StatusError = Color(0xFFD32F2F) // Dùng cho Hết hàng/Lỗi
+private val ChipSelectedColor = Color(0xFFFDDCDC) // Màu nền nhẹ cho chip được chọn
+// =================================================================
+
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductListScreen(
     onLogout: () -> Unit,
@@ -30,9 +59,9 @@ fun ProductListScreen(
     var bestSellingProducts by remember { mutableStateOf(listOf<Product>()) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var sortBy by remember { mutableStateOf("name") } // name, price_asc, price_desc
+    var sortBy by remember { mutableStateOf("name") }
 
-    // 🔹 Nghe realtime thay đổi từ Firestore
+    // 🔹 Logic Firestore giữ nguyên
     LaunchedEffect(Unit) {
         db.collection("products").addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -52,14 +81,14 @@ fun ProductListScreen(
             }
 
             products = list
-            
-            // Get new products (created within last 30 days)
-            val thirtyDaysAgo = com.google.firebase.Timestamp.now().toDate().time - (30L * 24 * 60 * 60 * 1000)
+
+            // Get new products
+            val thirtyDaysAgo = Timestamp.now().toDate().time - (30L * 24 * 60 * 60 * 1000)
             newProducts = list.filter { product ->
                 product.createdAt?.toDate()?.time?.let { it >= thirtyDaysAgo } ?: false
             }.sortedByDescending { it.createdAt?.toDate()?.time }.take(10)
-            
-            // Get best selling products from orders
+
+            // Get best selling products
             db.collection("orders")
                 .whereEqualTo("status", "delivered")
                 .get()
@@ -78,292 +107,259 @@ fun ProductListScreen(
                         products.find { it.id == productId }
                     }.take(10)
                 }
-            
-            Log.d("Firestore", "✅ Lấy được ${list.size} sản phẩm.")
         }
     }
 
-    // Filter and sort products
+
+    // Filter và Sort logic
     val filteredProducts = remember(products, searchQuery, selectedCategory, sortBy) {
         var filtered = products
-        
-        // Filter by search query
+
         if (searchQuery.isNotBlank()) {
             filtered = filtered.filter {
                 it.name.contains(searchQuery, ignoreCase = true) ||
-                it.description.contains(searchQuery, ignoreCase = true) ||
-                it.category.contains(searchQuery, ignoreCase = true) ||
-                it.type.contains(searchQuery, ignoreCase = true)
+                        (it.description?.contains(searchQuery, ignoreCase = true) ?: false) ||
+                        (it.category?.contains(searchQuery, ignoreCase = true) ?: false) ||
+                        (it.type?.contains(searchQuery, ignoreCase = true) ?: false)
             }
         }
-        
-        // Filter by category
+
         if (selectedCategory != null) {
             filtered = filtered.filter { it.category == selectedCategory }
         }
-        
-        // Sort
+
         filtered = when (sortBy) {
             "price_asc" -> filtered.sortedBy { it.price }
             "price_desc" -> filtered.sortedByDescending { it.price }
             "name" -> filtered.sortedBy { it.name }
             else -> filtered
         }
-        
+
         filtered
     }
 
     val categories = remember(products) {
-        products.map { it.category }.distinct().filter { it.isNotBlank() }
+        products.mapNotNull { it.category }.distinct().filter { it.isNotBlank() }
     }
 
     // 🔹 UI hiển thị sản phẩm
     Scaffold(
-        topBar = {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Cửa hàng quần áo", style = MaterialTheme.typography.headlineSmall)
-                }
-                
-                // Search Bar
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("Tìm kiếm sản phẩm...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Tìm kiếm") },
-                    singleLine = true
-                )
-                
-                // Category Filter
-                if (categories.isNotEmpty()) {
-                    Row(
+        containerColor = BackgroundLight,
+        // Loại bỏ TopBar của Scaffold để sử dụng CustomHeader trong LazyColumn
+    ) { paddingValues ->
+        // Sử dụng LazyColumn để chứa toàn bộ nội dung, nhưng phần Header sẽ là item cố định
+        LazyColumn(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            // ===================================================
+            // A. HEADER VÀ CÁC THÀNH PHẦN KHÔNG CUỘN (Sticky/Header Look)
+            // ===================================================
+            item {
+                Column(modifier = Modifier.background(CardBackground)) { // CardBackground = White cho Header
+                    // Logo + Title
+
+
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
+                        placeholder = { Text("Tìm kiếm sản phẩm...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Tìm kiếm", tint = SecondaryDark.copy(alpha = 0.6f)) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.extraSmall, // Sử dụng góc bo nhỏ
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryMaroon,
+                            unfocusedBorderColor = Color.LightGray.copy(alpha = 0.6f),
+                            focusedContainerColor = BackgroundLight,
+                            unfocusedContainerColor = BackgroundLight,
+                            focusedLeadingIconColor = PrimaryMaroon,
+                            unfocusedLeadingIconColor = SecondaryDark.copy(alpha = 0.6f),
+                            focusedTextColor = SecondaryDark,
+                            cursorColor = PrimaryMaroon
+                        )
+                    )
+                }
+            }
+
+            // Category Filter
+            if (categories.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        FilterChip(
+                        FilterChipCustom(
                             selected = selectedCategory == null,
                             onClick = { selectedCategory = null },
-                            label = { Text("Tất cả") }
+                            label = "Tất cả"
                         )
                         categories.forEach { category ->
-                            FilterChip(
+                            FilterChipCustom(
                                 selected = selectedCategory == category,
                                 onClick = { selectedCategory = category },
-                                label = { Text(category) }
+                                label = category
                             )
                         }
                     }
                 }
-                
-                // Sort Options
+            }
+
+            // Sort Options
+            item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Sắp xếp:", modifier = Modifier.padding(end = 8.dp))
-                    FilterChip(
-                        selected = sortBy == "name",
-                        onClick = { sortBy = "name" },
-                        label = { Text("Tên") }
-                    )
-                    FilterChip(
-                        selected = sortBy == "price_asc",
-                        onClick = { sortBy = "price_asc" },
-                        label = { Text("Giá tăng") }
-                    )
-                    FilterChip(
-                        selected = sortBy == "price_desc",
-                        onClick = { sortBy = "price_desc" },
-                        label = { Text("Giá giảm") }
-                    )
-                }
-            }
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-        ) {
-            if (filteredProducts.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        if (products.isEmpty()) "Không có sản phẩm nào được hiển thị." else "Không tìm thấy sản phẩm phù hợp.",
-                        style = MaterialTheme.typography.bodyMedium
+                        "Sắp xếp theo:",
+                        modifier = Modifier.padding(end = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = SecondaryDark
+                    )
+                    // Sử dụng RowScope.FilterChipCustom để căn chỉnh tốt hơn
+                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChipCustom(selected = sortBy == "name", onClick = { sortBy = "name" }, label = "Tên")
+                        FilterChipCustom(selected = sortBy == "price_asc", onClick = { sortBy = "price_asc" }, label = "Giá tăng")
+                        FilterChipCustom(selected = sortBy == "price_desc", onClick = { sortBy = "price_desc" }, label = "Giá giảm")
+                    }
+                }
+            }
+            // ===================================================
+
+            // B. BEST SELLING PRODUCTS (Bán chạy)
+            if (bestSellingProducts.isNotEmpty()) {
+                item {
+                    Text(
+                        "🏆 Sản phẩm bán chạy",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = PrimaryMaroon,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // New Products Section
-                    if (newProducts.isNotEmpty()) {
-                        item {
-                            Text(
-                                "Sản phẩm mới",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(bestSellingProducts) { product ->
+                            ProductHorizontalItem(product = product, onClick = { onNavigateToProductDetails(product.id) })
                         }
-                        item {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(newProducts) { product ->
-                                    ProductHorizontalItem(
-                                        product = product,
-                                        onClick = { onNavigateToProductDetails(product.id) }
-                                    )
-                                }
-                            }
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                    }
-                    
-                    // Best Selling Products Section
-                    if (bestSellingProducts.isNotEmpty()) {
-                        item {
-                            Text(
-                                "Sản phẩm bán chạy",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
-                        item {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(bestSellingProducts) { product ->
-                                    ProductHorizontalItem(
-                                        product = product,
-                                        onClick = { onNavigateToProductDetails(product.id) }
-                                    )
-                                }
-                            }
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                    }
-                    
-                    // All Products Section
-                    item {
-                        Text(
-                            "Tất cả sản phẩm",
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                    items(filteredProducts) { p ->
-                        ProductCustomerItem(
-                            product = p,
-                            onClick = { onNavigateToProductDetails(p.id) }
-                        )
                     }
                 }
+            }
+
+            // C. NEW PRODUCTS (Sản phẩm mới)
+            if (newProducts.isNotEmpty()) {
+                item {
+                    Text(
+                        "🔥 Sản phẩm mới",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = PrimaryMaroon,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(newProducts) { product ->
+                            ProductHorizontalItem(product = product, onClick = { onNavigateToProductDetails(product.id) })
+                        }
+                    }
+                }
+            }
+
+            // D. ALL PRODUCTS (Tất cả sản phẩm)
+            item {
+                Text(
+                    "🛒 Tất cả sản phẩm (${filteredProducts.size})",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = SecondaryDark,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            items(filteredProducts) { p ->
+                ProductCustomerItem(product = p, onClick = { onNavigateToProductDetails(p.id) }, modifier = Modifier.padding(horizontal = 16.dp))
             }
         }
     }
 }
 
+// =================================================================
+// 2. CÁC THÀNH PHẦN PHỤ TRỢ (Đã tùy chỉnh giao diện)
+// =================================================================
+
+// Thêm Modifier vào ProductCustomerItem
 @Composable
 fun ProductCustomerItem(
     product: Product,
+    modifier: Modifier = Modifier, // Thêm modifier
     onClick: () -> Unit = {}
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        modifier = modifier.fillMaxWidth().clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 🔸 Hiển thị ảnh sản phẩm nếu có
             if (product.imageUrl.isNotBlank()) {
                 Image(
                     painter = rememberAsyncImagePainter(product.imageUrl),
-                    contentDescription = "Ảnh sản phẩm",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
+                    contentDescription = product.name,
+                    // Sử dụng clip và fill để hình ảnh hiển thị đẹp hơn
+                    modifier = Modifier.size(90.dp).background(Color.LightGray).clip(MaterialTheme.shapes.small)
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.width(16.dp))
             }
 
-            Text(
-                text = product.name,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = product.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = SecondaryDark, maxLines = 2)
+                Spacer(Modifier.height(4.dp))
+
+                // Hiển thị giá
                 Text(
                     text = "${product.price.toInt()} VND",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontSize = 20.sp),
+                    color = PrimaryMaroon
                 )
-                if (product.rating > 0) {
-                    Text(
-                        text = "⭐ ${String.format("%.1f", product.rating)}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                Spacer(Modifier.height(8.dp))
+
+                Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    // Trạng thái tồn kho
+                    if (product.stock > 0) {
+                        Text(text = "Còn: ${product.stock}", style = MaterialTheme.typography.bodySmall, color = if (product.stock < 10) StatusError else SecondaryDark.copy(alpha = 0.7f))
+                    } else {
+                        Text(text = "Hết hàng", style = MaterialTheme.typography.bodySmall, color = StatusError, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Rating
+                    if ((product.rating ?: 0.0) > 0) {
+                        Spacer(Modifier.width(12.dp))
+                        Text(text = "⭐ ${String.format("%.1f", product.rating)}", style = MaterialTheme.typography.bodySmall, color = SecondaryDark)
+                    }
                 }
-            }
-            Spacer(Modifier.height(4.dp))
-            if (product.category.isNotBlank()) {
-                Text(
-                    text = product.category,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-            if (product.type.isNotBlank()) {
-                Text(
-                    text = "Loại: ${product.type}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-            }
-            if (product.stock > 0) {
-                Text(
-                    text = "Còn lại: ${product.stock}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (product.stock < 10) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-                )
-            } else {
-                Text(
-                    text = "Hết hàng",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
             }
         }
     }
 }
+
+// Giữ nguyên ProductHorizontalItem
 
 @Composable
 fun ProductHorizontalItem(
@@ -371,34 +367,35 @@ fun ProductHorizontalItem(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .width(150.dp)
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier = Modifier.width(170.dp).clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
     ) {
-        Column(
-            modifier = Modifier.padding(8.dp)
-        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
             if (product.imageUrl.isNotBlank()) {
                 Image(
                     painter = rememberAsyncImagePainter(product.imageUrl),
                     contentDescription = product.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
+                    modifier = Modifier.fillMaxWidth().height(140.dp).background(Color.LightGray)
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
             }
-            Text(
-                text = product.name,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2
-            )
-            Text(
-                text = "${product.price.toInt()} VND",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Text(text = product.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = SecondaryDark, maxLines = 2, minLines = 2)
+            Spacer(Modifier.height(4.dp))
+            Text(text = "${product.price.toInt()} VND", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold), color = PrimaryMaroon)
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RowScope.FilterChipCustom(selected: Boolean, onClick: () -> Unit, label: String) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)) },
+        // Tùy chỉnh màu sắc chip
+
+        border = if (selected) null else BorderStroke(1.dp, Color.LightGray)
+    )
 }

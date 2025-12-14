@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.thigiuaki"
-        minSdk = 24
+        minSdk = 25
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    implementation(libs.androidx.compose.material)
     debugImplementation("com.google.firebase:firebase-appcheck-debug") // Chỉ dùng trong debug
 
     // Sử dụng Version Catalog (libs)

@@ -1,6 +1,7 @@
 package com.example.thigiuaki
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -8,10 +9,25 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
+
+// =================================================================
+// 1. ĐỊNH NGHĨA MÀU SẮC (Clean Retail Design)
+// =================================================================
+private val BackgroundLight = Color(0xFFFAF9F6)
+private val PrimaryMaroon = Color(0xFF8D021F)
+private val SecondaryDark = Color(0xFF424242)
+private val CardBackground = Color.White
+private val AccentGreen = Color(0xFF388E3C) // Dùng cho biểu tượng Doanh thu
+private val AccentBlue = Color(0xFF1976D2)  // Dùng cho biểu tượng Đơn hàng
+// =================================================================
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,7 +39,7 @@ fun AdminStatisticsScreen() {
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        // --- 1. Thiết lập khoảng thời gian ---
+        // --- 1. Thiết lập khoảng thời gian (Giữ nguyên) ---
         val today = Calendar.getInstance().apply {
             time = Date()
             set(Calendar.HOUR_OF_DAY, 0)
@@ -42,14 +58,13 @@ fun AdminStatisticsScreen() {
         }
         val monthStartTimestamp = Timestamp(monthStart.time)
 
-        // --- 2. Daily revenue (Truy vấn cần INDEX) ---
+        // --- 2. Daily revenue (Logic giữ nguyên) ---
         db.collection("orders")
             .whereGreaterThanOrEqualTo("createdAt", todayStart)
             .whereEqualTo("status", "delivered")
             .get()
             .addOnSuccessListener { snapshot ->
                 dailyRevenue = snapshot.documents.sumOf { doc ->
-                    // Đã xác nhận: Dựa vào totalAmount (kiểu number trong Firestore)
                     doc.getDouble("totalAmount") ?: 0.0
                 }
             }
@@ -57,7 +72,7 @@ fun AdminStatisticsScreen() {
                 Log.e("AdminStats", "Error fetching daily revenue (CHECK INDEXES): ${e.message}")
             }
 
-        // --- 3. Monthly revenue (Truy vấn cần INDEX) ---
+        // --- 3. Monthly revenue (Logic giữ nguyên) ---
         db.collection("orders")
             .whereGreaterThanOrEqualTo("createdAt", monthStartTimestamp)
             .whereEqualTo("status", "delivered")
@@ -71,7 +86,7 @@ fun AdminStatisticsScreen() {
                 Log.e("AdminStats", "Error fetching monthly revenue (CHECK INDEXES): ${e.message}")
             }
 
-        // --- 4. Total orders ---
+        // --- 4. Total orders (Logic giữ nguyên) ---
         db.collection("orders")
             .get()
             .addOnSuccessListener { snapshot ->
@@ -87,9 +102,11 @@ fun AdminStatisticsScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Thống kê doanh thu") }
+                title = { Text("Thống kê doanh thu", color = PrimaryMaroon) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
             )
-        }
+        },
+        containerColor = BackgroundLight
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -103,25 +120,28 @@ fun AdminStatisticsScreen() {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = PrimaryMaroon)
                 }
             } else {
                 StatisticCard(
                     title = "Doanh thu hôm nay",
                     value = "${dailyRevenue.toLong()} VND",
-                    icon = Icons.Default.Today
+                    icon = Icons.Default.Today,
+                    tintColor = AccentGreen
                 )
 
                 StatisticCard(
                     title = "Doanh thu tháng này",
                     value = "${monthlyRevenue.toLong()} VND",
-                    icon = Icons.Default.CalendarMonth
+                    icon = Icons.Default.CalendarMonth,
+                    tintColor = PrimaryMaroon
                 )
 
                 StatisticCard(
                     title = "Tổng số đơn hàng",
                     value = "$totalOrders đơn",
-                    icon = Icons.Default.ShoppingCart
+                    icon = Icons.Default.ShoppingCart,
+                    tintColor = AccentBlue
                 )
             }
         }
@@ -132,11 +152,13 @@ fun AdminStatisticsScreen() {
 fun StatisticCard(
     title: String,
     value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: ImageVector,
+    tintColor: Color // Thêm tham số màu sắc cho icon và giá trị
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground)
     ) {
         Row(
             modifier = Modifier
@@ -147,22 +169,22 @@ fun StatisticCard(
         ) {
             Column {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary
+                    text = title.uppercase(),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = SecondaryDark.copy(alpha = 0.7f)
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = tintColor // Sử dụng màu nhấn động
                 )
             }
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(56.dp), // Icon lớn hơn
+                tint = tintColor.copy(alpha = 0.8f) // Icon lớn và nổi bật hơn
             )
         }
     }

@@ -18,20 +18,16 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
 import java.util.*
 
+// IMPORTS CÁC MÀN HÌNH MỚI
+import com.example.thigiuaki.ui.screens.*
+import com.example.thigiuaki.model.CartItem as AppCartItem // Alias để tránh xung đột tên
+import com.example.thigiuaki.model.Product as AppProduct // Alias cho Product model
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // FIX LỖI UI XML
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
-        // Khởi tạo Firebase
         FirebaseApp.initializeApp(this)
-
-        // =============================================================
-        // BƯỚC 1: GỌI HÀM CHUYỂN ĐỔI DỮ LIỆU CŨ TỪ STRING SANG TIMESTAMP
-        // CHẠY HÀM NÀY MỘT LẦN VÀ XÓA SAU KHI HOÀN TẤT MIGRATION
-        // =============================================================
         migrateOldOrderData()
 
         setContent {
@@ -39,23 +35,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-// =============================================================
-// HÀM HELPER DI CHUYỂN DỮ LIỆU CŨ TRONG FIRESTORE
-// =============================================================
 fun migrateOldOrderData() {
     val db = FirebaseFirestore.getInstance()
     val collectionRef = db.collection("orders")
 
     // Định dạng chuỗi ngày giờ bạn đang lưu trong Firestore ("10/12/2025 22:47")
-    // Nếu bạn có nhiều định dạng, bạn cần xử lý tất cả
     val stringDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-
-    // Định dạng cho pickupTime nếu nó có định dạng khác (ví dụ: "December 2, 2025 at 3:15:52 PM UTC+7")
-    // Lưu ý: Việc parse các múi giờ như UTC+7 từ String có thể phức tạp.
-    // Nếu pickupTime có định dạng khác, bạn cần tạo SimpleDateFormat khác cho nó.
-    // Ví dụ (chỉ là ví dụ, format thực tế có thể khác):
-    // val pickupTimeDateFormat = SimpleDateFormat("MMMM d, yyyy 'at' h:mm:ss a z", Locale.ENGLISH)
 
     collectionRef.get().addOnSuccessListener { snapshot ->
         for (document in snapshot.documents) {
@@ -80,11 +65,7 @@ fun migrateOldOrderData() {
             // --- Xử lý pickupTime ---
             val pickupTimeValue = document.get("pickupTime")
             if (pickupTimeValue is String) {
-                // TẠM THỜI BỎ QUA VÌ ĐỊNH DẠNG "December 2, 2025 at 3:15:52 PM UTC+7"
-                // rất khó parse chính xác mà không có format chuẩn.
-                // Tốt nhất nên sửa thủ công hoặc nhập lại.
-                // Nếu bạn có thể cung cấp format chính xác, tôi sẽ sửa.
-                // Hiện tại, ta sẽ bỏ qua để tránh lỗi.
+                // (Giữ nguyên phần xử lý bị bỏ qua trước đó)
             }
 
             // Thực hiện cập nhật nếu có trường cần sửa
@@ -100,12 +81,9 @@ fun migrateOldOrderData() {
         }
     }
 }
-// =============================================================
-// KẾT THÚC HÀM HELPER
-// =============================================================
-
-// Định nghĩa các trạng thái/màn hình điều hướng
+// ========================================================
 sealed class Screen {
+    object Splash : Screen() // <-- ĐÃ THÊM: Màn hình Splash
     object RoleSelection : Screen()
     object AdminLogin : Screen()
     object CustomerLogin : Screen()
@@ -130,8 +108,9 @@ fun ThigiuakiApp() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            var currentScreen by remember { mutableStateOf<Screen>(Screen.RoleSelection) }
-            var cartItems by remember { mutableStateOf(listOf<com.example.thigiuaki.model.CartItem>()) }
+            // KHỞI TẠO BẰNG MÀN HÌNH SPLASH
+            var currentScreen by remember { mutableStateOf<Screen>(Screen.Splash) }
+            var cartItems by remember { mutableStateOf(listOf<AppCartItem>()) }
 
             // Hàm xử lý đăng xuất chung
             val handleLogout: () -> Unit = {
@@ -146,9 +125,9 @@ fun ThigiuakiApp() {
                     db.collection("cart")
                         .whereEqualTo("userId", userId)
                         .addSnapshotListener { snapshot, _ ->
-                            val items: List<com.example.thigiuaki.model.CartItem> = snapshot?.documents?.mapNotNull { doc ->
+                            val items: List<AppCartItem> = snapshot?.documents?.mapNotNull { doc ->
                                 try {
-                                    val item = doc.toObject(com.example.thigiuaki.model.CartItem::class.java)
+                                    val item = doc.toObject(AppCartItem::class.java)
                                     item?.apply {
                                         id = doc.id
                                     }
@@ -162,6 +141,15 @@ fun ThigiuakiApp() {
             }
 
             when (currentScreen) {
+                // <-- ĐÃ THÊM: Logic cho Splash Screen
+                is Screen.Splash -> SplashScreen(
+                    onTimeout = {
+                        // Sau khi Splash kết thúc, chuyển đến màn hình chọn vai trò
+                        currentScreen = Screen.RoleSelection
+                    }
+                )
+                // -->
+
                 is Screen.RoleSelection -> RoleSelectionScreen(
                     onAdminSelected = { currentScreen = Screen.AdminLogin },
                     onCustomerSelected = { currentScreen = Screen.CustomerLogin }
@@ -220,12 +208,12 @@ fun ThigiuakiApp() {
                         onBack = { currentScreen = Screen.CustomerHome },
                         onAddToCart = { product, size, color ->
                             val userId = auth.currentUser?.uid ?: return@ProductDetailsScreen
-                            val cartItem = com.example.thigiuaki.model.CartItem(
+                            val cartItem = AppCartItem(
                                 productId = product.id,
                                 productName = product.name,
                                 productImageUrl = product.imageUrl,
                                 price = product.price,
-                                quantity = 1,
+                                quantity = 2,
                                 selectedSize = size,
                                 selectedColor = color,
                                 userId = userId

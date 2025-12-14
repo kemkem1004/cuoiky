@@ -9,3 +9,7 @@ val Pink80 = Color(0xFFEFB8C8)
 val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
+// Định nghĩa lại màu sắc từ Login/Register
+private val BackgroundLight = Color(0xFFFAF9F6)
+private val PrimaryMaroon = Color(0xFF8D021F)
+private val SecondaryDark = Color(0xFF424242)
