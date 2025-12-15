@@ -22,6 +22,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
 import android.util.Log // Cần thiết cho các Dialog
+import com.google.firebase.auth.EmailAuthProvider
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+
+
 
 // =================================================================
 // 1. ĐỊNH NGHĨA MÀU SẮC VÀ CONSTANTS
@@ -102,6 +107,8 @@ fun ProfileScreen(
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showChangeEmailDialog by remember { mutableStateOf(false) }
     var showChangePhoneDialog by remember { mutableStateOf(false) }
+    var authEmail by remember { mutableStateOf("") }
+
 
     LaunchedEffect(userId) {
         if (userId.isNotBlank()) {
@@ -116,6 +123,14 @@ fun ProfileScreen(
                 }
         }
     }
+
+    LaunchedEffect(Unit) {
+        val firebaseUser = FirebaseAuth.getInstance().currentUser
+        firebaseUser?.reload()?.addOnSuccessListener {
+            authEmail = firebaseUser.email ?: ""
+        }
+    }
+
 
     Scaffold(
         topBar = {
@@ -157,7 +172,11 @@ fun ProfileScreen(
                     Divider(color = DividerColor)
                     Spacer(Modifier.height(12.dp))
 
-                    ProfileInfoRow(label = "Email", value = user.email.ifBlank { auth.currentUser?.email ?: "Chưa cập nhật" })
+                    ProfileInfoRow(
+                        label = "Email",
+                        value = authEmail.ifBlank { "Chưa cập nhật" }
+                    )
+
                     Spacer(Modifier.height(8.dp))
                     ProfileInfoRow(label = "Số điện thoại", value = user.phone.ifBlank { "Chưa cập nhật" })
                 }
@@ -211,10 +230,10 @@ fun ProfileScreen(
 
     if (showChangeEmailDialog) {
         ChangeEmailDialog(
-            currentEmail = user.email.ifBlank { auth.currentUser?.email ?: "" },
             onDismiss = { showChangeEmailDialog = false },
-            onSuccess = { newEmail -> user = user.copy(email = newEmail) }
+            onSuccess = { /* không cần xử lý */ }
         )
+
     }
 
     if (showChangePhoneDialog) {
@@ -276,47 +295,204 @@ fun ChangePasswordDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            Button(onClick = { /* Logic đổi mật khẩu */ }, enabled = !isLoading && newPassword.isNotBlank() && confirmPassword.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)) {
-                if (isLoading) { CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White) } else { Text("Đổi mật khẩu") }
+            Button(
+                onClick = {
+                    errorMessage = null
+                    isLoading = true
+
+                    val user = auth.currentUser
+                    if (user == null || user.email == null) {
+                        errorMessage = "Người dùng chưa đăng nhập"
+                        isLoading = false
+                        return@Button
+                    }
+
+                    val credential = EmailAuthProvider.getCredential(
+                        user.email!!,
+                        currentPassword
+                    )
+
+                    user.reauthenticate(credential)
+                        .addOnSuccessListener {
+                            user.updatePassword(newPassword)
+                                .addOnSuccessListener {
+                                    isLoading = false
+                                    onDismiss()
+                                }
+                                .addOnFailureListener {
+                                    errorMessage = it.message
+                                    isLoading = false
+                                }
+                        }
+                        .addOnFailureListener {
+                            errorMessage = "Mật khẩu hiện tại không đúng"
+                            isLoading = false
+                        }
+                },
+                enabled = !isLoading &&
+                        currentPassword.isNotBlank() &&
+                        newPassword.length >= 6 &&
+                        newPassword == confirmPassword,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Text("Đổi mật khẩu")
+                }
             }
+
         },
         dismissButton = { TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = SecondaryDark)) { Text("Hủy") } },
         containerColor = BackgroundLight
     )
 }
-
 @Composable
-fun ChangeEmailDialog(currentEmail: String, onDismiss: () -> Unit, onSuccess: (String) -> Unit) {
+fun ChangeEmailDialog(
+    onDismiss: () -> Unit,
+    onSuccess: (String) -> Unit
+) {
     val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
-    val userId = auth.currentUser?.uid ?: ""
+    var currentEmail by remember { mutableStateOf("") }
+
     var newEmail by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // 🔥 LUÔN reload email khi dialog mở
+    LaunchedEffect(Unit) {
+        auth.currentUser?.reload()?.addOnSuccessListener {
+            currentEmail = auth.currentUser?.email ?: ""
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Đổi email", color = PrimaryMaroon) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Email hiện tại:", style = MaterialTheme.typography.bodyMedium, color = SecondaryDark.copy(alpha = 0.7f))
-                Text(currentEmail, style = MaterialTheme.typography.titleMedium, color = PrimaryMaroon)
 
-                OutlinedTextField(value = newEmail, onValueChange = { newEmail = it }, label = { Text("Email mới") }, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryMaroon, focusedLabelColor = PrimaryMaroon))
-                OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Mật khẩu xác nhận") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryMaroon, focusedLabelColor = PrimaryMaroon))
-                if (errorMessage != null) { Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error) }
+                Text(
+                    "Email hiện tại:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SecondaryDark.copy(alpha = 0.7f)
+                )
+
+                Text(
+                    currentEmail.ifBlank { "Chưa cập nhật" },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PrimaryMaroon
+                )
+
+                OutlinedTextField(
+                    value = newEmail,
+                    onValueChange = { newEmail = it },
+                    label = { Text("Email mới") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryMaroon,
+                        focusedLabelColor = PrimaryMaroon
+                    )
+                )
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Mật khẩu xác nhận") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryMaroon,
+                        focusedLabelColor = PrimaryMaroon
+                    )
+                )
+
+                if (errorMessage != null) {
+                    Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { /* Logic đổi email */ }, enabled = !isLoading && newEmail.isNotBlank() && password.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)) {
-                if (isLoading) { CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White) } else { Text("Đổi email") }
+            Button(
+                onClick = {
+                    errorMessage = null
+                    val user = auth.currentUser
+
+                    if (user == null || user.email.isNullOrBlank()) {
+                        errorMessage = "Không lấy được email người dùng"
+                        return@Button
+                    }
+
+                    if (password.isBlank()) {
+                        errorMessage = "Vui lòng nhập mật khẩu"
+                        return@Button
+                    }
+
+                    if (newEmail.isBlank()) {
+                        errorMessage = "Email mới không được để trống"
+                        return@Button
+                    }
+
+                    isLoading = true
+
+                    val credential = EmailAuthProvider.getCredential(
+                        user.email!!,
+                        password
+                    )
+
+                    user.reauthenticate(credential)
+                        .addOnSuccessListener {
+                            user.verifyBeforeUpdateEmail(newEmail)
+                                .addOnSuccessListener {
+                                    Toast.makeText(
+                                        context,
+                                        "Đã gửi email xác nhận. Vui lòng kiểm tra hộp thư.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                    onSuccess(newEmail)
+                                    onDismiss()
+                                }
+                                .addOnFailureListener {
+                                    errorMessage = it.message
+                                    isLoading = false
+                                }
+                        }
+                        .addOnFailureListener {
+                            errorMessage = "Mật khẩu không đúng"
+                            isLoading = false
+                        }
+                },
+                enabled = !isLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Text("Đổi email")
+                }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = SecondaryDark)) { Text("Hủy") } },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = SecondaryDark)
+            ) {
+                Text("Hủy")
+            }
+        },
         containerColor = BackgroundLight
     )
 }
+
 
 @Composable
 fun ChangePhoneDialog(currentPhone: String, userId: String, onDismiss: () -> Unit, onSuccess: (String) -> Unit) {
@@ -335,9 +511,37 @@ fun ChangePhoneDialog(currentPhone: String, userId: String, onDismiss: () -> Uni
             }
         },
         confirmButton = {
-            Button(onClick = { /* Logic đổi số điện thoại */ }, enabled = !isLoading && newPhone.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)) {
-                if (isLoading) { CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White) } else { Text("Lưu") }
+            Button(
+                onClick = {
+                    errorMessage = null
+                    isLoading = true
+
+                    db.collection("users")
+                        .document(userId)
+                        .update("phone", newPhone)
+                        .addOnSuccessListener {
+                            isLoading = false
+                            onSuccess(newPhone)
+                            onDismiss()
+                        }
+                        .addOnFailureListener {
+                            errorMessage = it.message
+                            isLoading = false
+                        }
+                },
+                enabled = !isLoading && newPhone.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Text("Lưu")
+                }
             }
+
         },
         dismissButton = { TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = SecondaryDark)) { Text("Hủy") } },
         containerColor = BackgroundLight
