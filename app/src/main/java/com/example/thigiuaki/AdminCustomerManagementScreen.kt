@@ -187,7 +187,7 @@ fun AdminChatScreen(customer: User, onBack: () -> Unit) {
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 items(messages) { msg ->
-                    val isUser = msg.senderRole == "user"
+                    val isUser = msg.senderRole == "admin"
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
@@ -198,6 +198,7 @@ fun AdminChatScreen(customer: User, onBack: () -> Unit) {
                                     color = if (isUser) ChatUserBubbleColor else ChatAdminBubbleColor,
                                     shape = RoundedCornerShape(12.dp)
                                 )
+
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                                 .widthIn(max = 300.dp)
                         ) {
