@@ -210,14 +210,14 @@ fun ThigiuakiApp() {
                     ProductDetailsScreen(
                         productId = productId,
                         onBack = { currentScreen = Screen.CustomerHome },
-                        onAddToCart = { product, size, color ->
+                        onAddToCart = { product, size, color, quantity -> // <-- thêm quantity
                             val userId = auth.currentUser?.uid ?: return@ProductDetailsScreen
                             val cartItem = AppCartItem(
                                 productId = product.id,
                                 productName = product.name,
                                 productImageUrl = product.imageUrl,
                                 price = product.price,
-                                quantity = 2,
+                                quantity = quantity, // <-- dùng quantity đúng
                                 selectedSize = size,
                                 selectedColor = color,
                                 userId = userId
@@ -228,16 +228,17 @@ fun ThigiuakiApp() {
                     )
                 }
 
+
                 is Screen.Cart -> CartScreen(
+                    onBack = { currentScreen = Screen.CustomerHome }, // <-- quay về Home
                     onCheckout = {
-                        if (cartItems.isNotEmpty()) {
-                            currentScreen = Screen.Checkout
-                        }
+                        if (cartItems.isNotEmpty()) currentScreen = Screen.Checkout
                     },
                     onNavigateToProductDetails = { productId ->
                         currentScreen = Screen.ProductDetails(productId)
                     }
                 )
+
 
                 is Screen.Checkout -> CheckoutScreen(
                     cartItems = cartItems,

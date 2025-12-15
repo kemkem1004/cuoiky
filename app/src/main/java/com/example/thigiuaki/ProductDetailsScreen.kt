@@ -47,7 +47,7 @@ private val GoldStar = Color(0xFFFFC72C)
 fun ProductDetailsScreen(
     productId: String,
     onBack: () -> Unit,
-    onAddToCart: (Product, String, String) -> Unit
+    onAddToCart: (Product, String, String, Int) -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
     val auth = FirebaseAuth.getInstance()
@@ -232,8 +232,7 @@ fun ProductDetailsScreen(
                         Button(
                             onClick = {
                                 if (product != null && selectedSize.isNotBlank() && selectedColor.isNotBlank()) {
-                                    onAddToCart(product!!, selectedSize, selectedColor)
-                                    // Note: Navigation to checkout should be handled by parent
+                                    onAddToCart(product!!, selectedSize, selectedColor, quantity) // <-- thêm quantity
                                 }
                             },
                             modifier = Modifier

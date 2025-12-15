@@ -1,6 +1,7 @@
 package com.example.thigiuaki
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,7 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.thigiuaki.model.Address
 import com.example.thigiuaki.model.CartItem
 import com.google.firebase.Timestamp
@@ -19,7 +22,12 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.toObject
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.Calendar
+
+private val BackgroundLight = Color(0xFFFAF9F6)
+private val PrimaryMaroon = Color(0xFF8D021F)
+private val SecondaryDark = Color(0xFF424242)
+private val CardBackground = Color.White
+private val StatusError = Color(0xFFD32F2F)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,30 +71,25 @@ fun CheckoutScreen(
     val handlePlaceOrder: () -> Unit = handlePlaceOrder@{
         if (shippingAddress.fullName.isBlank() || shippingAddress.phone.isBlank() ||
             shippingAddress.street.isBlank() || shippingAddress.city.isBlank()) {
-            // Hiển thị toast/Snackbar lỗi
             return@handlePlaceOrder
         }
 
         val now = Timestamp.now()
         var pickupTimestamp: Timestamp? = null
-
         if (deliveryType == "store_pickup" && pickupTime.isNotBlank()) {
             try {
                 val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
                 val pickupDate = dateFormat.parse(pickupTime)
-                if (pickupDate != null) {
-                    pickupTimestamp = Timestamp(pickupDate)
-                }
+                if (pickupDate != null) pickupTimestamp = Timestamp(pickupDate)
             } catch (e: Exception) {
                 Log.e("Checkout", "Error parsing pickup time: ${e.message}")
-                return@handlePlaceOrder // Dừng nếu giờ lấy không hợp lệ
+                return@handlePlaceOrder
             }
         }
 
         isLoading = true
         val orderData = hashMapOf(
             "userId" to userId,
-            // Sử dụng Map cho items, dựa vào CartItem.kt đã sửa constructor rỗng để ánh xạ đọc
             "items" to cartItems.map { item ->
                 hashMapOf(
                     "productId" to item.productId,
@@ -114,20 +117,13 @@ fun CheckoutScreen(
             "isProcessed" to false,
             "paymentMethod" to paymentMethod,
             "paymentStatus" to "pending",
-
-            // FIX LỖI GHI DỮ LIỆU: Ghi orderDate là Timestamp
             "createdAt" to now,
             "orderDate" to now
         )
-
-        if (pickupTimestamp != null) {
-            orderData["pickupTime"] = pickupTimestamp
-        }
-
+        if (pickupTimestamp != null) orderData["pickupTime"] = pickupTimestamp
 
         db.collection("orders").add(orderData)
             .addOnSuccessListener { orderDoc ->
-                // Clear cart và Update product stock
                 cartItems.forEach { item ->
                     db.collection("cart").document(item.id).delete()
                     db.collection("products").document(item.productId)
@@ -138,8 +134,6 @@ fun CheckoutScreen(
                                 .update("stock", currentStock - item.quantity)
                         }
                 }
-
-                Log.d("Checkout", "Order placed: ${orderDoc.id}")
                 isLoading = false
                 onOrderPlaced()
             }
@@ -150,20 +144,23 @@ fun CheckoutScreen(
     }
 
     Scaffold(
+        containerColor = BackgroundLight,
         topBar = {
             TopAppBar(
-                title = { Text("Thanh toán") },
+                title = { Text("Thanh toán", color = PrimaryMaroon) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Quay lại")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Quay lại", tint = PrimaryMaroon)
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundLight)
             )
         },
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 8.dp
+                shadowElevation = 8.dp,
+                color = CardBackground
             ) {
                 Column(
                     modifier = Modifier
@@ -174,11 +171,11 @@ fun CheckoutScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Tổng tiền:", style = MaterialTheme.typography.bodyLarge)
+                        Text("Tổng tiền:", style = MaterialTheme.typography.bodyLarge, color = SecondaryDark)
                         Text(
                             "${totalAmount.toInt()} VND",
                             style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = PrimaryMaroon
                         )
                     }
                     Spacer(Modifier.height(12.dp))
@@ -187,12 +184,13 @@ fun CheckoutScreen(
                         enabled = !isLoading && shippingAddress.fullName.isNotBlank(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp)
+                            .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
                     ) {
                         if (isLoading) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+                            CircularProgressIndicator(color = Color.White)
                         } else {
-                            Text("Đặt hàng")
+                            Text("Đặt hàng", color = Color.White)
                         }
                     }
                 }
@@ -206,44 +204,37 @@ fun CheckoutScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Order Summary
             item {
-                Text(
-                    "Đơn hàng (${cartItems.size} sản phẩm)",
-                    style = MaterialTheme.typography.titleLarge
+                Text("Đơn hàng (${cartItems.size} sản phẩm)",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = PrimaryMaroon
                 )
             }
             items(cartItems) { item ->
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CardBackground, shape = MaterialTheme.shapes.medium)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "${item.productName} x${item.quantity}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        "${(item.price * item.quantity).toInt()} VND",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Text("${item.productName} x${item.quantity}", color = SecondaryDark)
+                    Text("${(item.price * item.quantity).toInt()} VND", color = SecondaryDark)
                 }
             }
 
-            item { Divider() }
+            item { Divider(color = SecondaryDark) }
 
-            // Shipping Address
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "Địa chỉ giao hàng",
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    Text("Địa chỉ giao hàng", style = MaterialTheme.typography.titleLarge, color = PrimaryMaroon)
                     TextButton(onClick = { showAddressDialog = true }) {
-                        Text(if (addresses.isEmpty()) "Thêm địa chỉ" else "Chọn địa chỉ")
+                        Text(if (addresses.isEmpty()) "Thêm địa chỉ" else "Chọn địa chỉ", color = PrimaryMaroon)
                     }
                 }
             }
@@ -252,39 +243,33 @@ fun CheckoutScreen(
                 if (shippingAddress.fullName.isNotBlank()) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        colors = CardDefaults.cardColors(containerColor = CardBackground)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(shippingAddress.fullName, style = MaterialTheme.typography.titleMedium, color = SecondaryDark)
+                            Text(shippingAddress.phone, color = SecondaryDark)
                             Text(
-                                shippingAddress.fullName,
-                                style = MaterialTheme.typography.titleMedium
+                                "${shippingAddress.street}, ${shippingAddress.ward}, ${shippingAddress.district}, ${shippingAddress.city}",
+                                color = SecondaryDark
                             )
-                            Text(shippingAddress.phone)
-                            Text("${shippingAddress.street}, ${shippingAddress.ward}, ${shippingAddress.district}, ${shippingAddress.city}")
                         }
                     }
                 } else {
                     OutlinedButton(
                         onClick = { showAddressDialog = true },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryMaroon)
                     ) {
                         Text("Thêm địa chỉ giao hàng")
                     }
                 }
             }
 
-            item { Divider() }
+            item { Divider(color = SecondaryDark) }
 
             // Delivery Type
             item {
-                Text(
-                    "Hình thức nhận hàng",
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Text("Hình thức nhận hàng", style = MaterialTheme.typography.titleLarge, color = PrimaryMaroon)
             }
             item {
                 Row(
@@ -294,15 +279,20 @@ fun CheckoutScreen(
                     FilterChip(
                         selected = deliveryType == "home_delivery",
                         onClick = { deliveryType = "home_delivery" },
-                        label = { Text("Giao hàng tận nơi") }
+                        label = { Text("Giao hàng tận nơi") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryMaroon.copy(alpha = 0.1f),
+                            selectedLabelColor = PrimaryMaroon
+                        )
                     )
                     FilterChip(
                         selected = deliveryType == "store_pickup",
-                        onClick = {
-                            deliveryType = "store_pickup"
-                            showPickupTimeDialog = true
-                        },
-                        label = { Text("Đến lấy") }
+                        onClick = { deliveryType = "store_pickup"; showPickupTimeDialog = true },
+                        label = { Text("Đến lấy") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryMaroon.copy(alpha = 0.1f),
+                            selectedLabelColor = PrimaryMaroon
+                        )
                     )
                 }
             }
@@ -318,21 +308,18 @@ fun CheckoutScreen(
                         readOnly = true,
                         trailingIcon = {
                             TextButton(onClick = { showPickupTimeDialog = true }) {
-                                Text("Chọn giờ")
+                                Text("Chọn giờ", color = PrimaryMaroon)
                             }
                         }
                     )
                 }
             }
 
-            item { Divider() }
+            item { Divider(color = SecondaryDark) }
 
             // Order Notes
             item {
-                Text(
-                    "Ghi chú đơn hàng",
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Text("Ghi chú đơn hàng", style = MaterialTheme.typography.titleLarge, color = PrimaryMaroon)
             }
             item {
                 OutlinedTextField(
@@ -344,14 +331,11 @@ fun CheckoutScreen(
                 )
             }
 
-            item { Divider() }
+            item { Divider(color = SecondaryDark) }
 
             // Payment Method
             item {
-                Text(
-                    "Phương thức thanh toán",
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Text("Phương thức thanh toán", style = MaterialTheme.typography.titleLarge, color = PrimaryMaroon)
             }
             item {
                 Row(
@@ -361,17 +345,29 @@ fun CheckoutScreen(
                     FilterChip(
                         selected = paymentMethod == "cash",
                         onClick = { paymentMethod = "cash" },
-                        label = { Text("Tiền mặt") }
+                        label = { Text("Tiền mặt") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryMaroon.copy(alpha = 0.1f),
+                            selectedLabelColor = PrimaryMaroon
+                        )
                     )
                     FilterChip(
                         selected = paymentMethod == "card",
                         onClick = { paymentMethod = "card" },
-                        label = { Text("Thẻ") }
+                        label = { Text("Thẻ") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryMaroon.copy(alpha = 0.1f),
+                            selectedLabelColor = PrimaryMaroon
+                        )
                     )
                     FilterChip(
                         selected = paymentMethod == "online",
                         onClick = { paymentMethod = "online" },
-                        label = { Text("Online") }
+                        label = { Text("Online") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryMaroon.copy(alpha = 0.1f),
+                            selectedLabelColor = PrimaryMaroon
+                        )
                     )
                 }
             }
@@ -430,40 +426,26 @@ fun PickupTimeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chọn giờ đến lấy") },
+        title = { Text("Chọn giờ đến lấy", color = PrimaryMaroon) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Date picker would go here - simplified version
-                Text("Ngày: ${selectedDate.get(Calendar.DAY_OF_MONTH)}/${selectedDate.get(Calendar.MONTH) + 1}/${selectedDate.get(Calendar.YEAR)}")
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Ngày: ${selectedDate.get(Calendar.DAY_OF_MONTH)}/${selectedDate.get(Calendar.MONTH) + 1}/${selectedDate.get(Calendar.YEAR)}", color = SecondaryDark)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Giờ:")
+                        Text("Giờ:", color = SecondaryDark)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { if (selectedHour > 0) selectedHour-- }) {
-                                Text("-")
-                            }
-                            Text("$selectedHour")
-                            IconButton(onClick = { if (selectedHour < 23) selectedHour++ }) {
-                                Text("+")
-                            }
+                            IconButton(onClick = { if (selectedHour > 0) selectedHour-- }) { Text("-", color = PrimaryMaroon) }
+                            Text("$selectedHour", color = SecondaryDark)
+                            IconButton(onClick = { if (selectedHour < 23) selectedHour++ }) { Text("+", color = PrimaryMaroon) }
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Phút:")
+                        Text("Phút:", color = SecondaryDark)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { if (selectedMinute > 0) selectedMinute -= 15 }) {
-                                Text("-")
-                            }
-                            Text("$selectedMinute")
-                            IconButton(onClick = { if (selectedMinute < 45) selectedMinute += 15 }) {
-                                Text("+")
-                            }
+                            IconButton(onClick = { if (selectedMinute > 0) selectedMinute -= 15 }) { Text("-", color = PrimaryMaroon) }
+                            Text("$selectedMinute", color = SecondaryDark)
+                            IconButton(onClick = { if (selectedMinute < 45) selectedMinute += 15 }) { Text("+", color = PrimaryMaroon) }
                         }
                     }
                 }
@@ -475,16 +457,14 @@ fun PickupTimeDialog(
                     selectedDate.set(Calendar.HOUR_OF_DAY, selectedHour)
                     selectedDate.set(Calendar.MINUTE, selectedMinute)
                     onConfirm(selectedDate.time)
-                }
-            ) {
-                Text("Xác nhận")
-            }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
+            ) { Text("Xác nhận", color = Color.White) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Hủy")
-            }
-        }
+            TextButton(onClick = onDismiss) { Text("Hủy", color = PrimaryMaroon) }
+        },
+        containerColor = CardBackground
     )
 }
 
@@ -504,81 +484,29 @@ fun AddressDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Địa chỉ giao hàng") },
+        title = { Text("Địa chỉ giao hàng", color = PrimaryMaroon) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = fullName,
-                    onValueChange = { fullName = it },
-                    label = { Text("Họ và tên") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("Số điện thoại") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = street,
-                    onValueChange = { street = it },
-                    label = { Text("Số nhà, đường") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = ward,
-                    onValueChange = { ward = it },
-                    label = { Text("Phường/Xã") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = district,
-                    onValueChange = { district = it },
-                    label = { Text("Quận/Huyện") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = city,
-                    onValueChange = { city = it },
-                    label = { Text("Thành phố/Tỉnh") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = isDefault,
-                        onCheckedChange = { isDefault = it }
-                    )
-                    Text("Đặt làm địa chỉ mặc định")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = fullName, onValueChange = { fullName = it }, label = { Text("Họ và tên") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Số điện thoại") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = street, onValueChange = { street = it }, label = { Text("Số nhà, đường") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = ward, onValueChange = { ward = it }, label = { Text("Phường/Xã") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = district, onValueChange = { district = it }, label = { Text("Quận/Huyện") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = city, onValueChange = { city = it }, label = { Text("Thành phố/Tỉnh") }, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isDefault, onCheckedChange = { isDefault = it }, colors = CheckboxDefaults.colors(checkedColor = PrimaryMaroon))
+                    Text("Đặt làm địa chỉ mặc định", color = SecondaryDark)
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onSave(
-                        address.copy(
-                            fullName = fullName,
-                            phone = phone,
-                            street = street,
-                            city = city,
-                            district = district,
-                            ward = ward,
-                            isDefault = isDefault
-                        )
-                    )
-                }
-            ) {
-                Text("Lưu")
-            }
+            Button(onClick = { onSave(address.copy(fullName=fullName, phone=phone, street=street, city=city, district=district, ward=ward, isDefault=isDefault)) },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
+            ) { Text("Lưu", color = Color.White) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Hủy")
-            }
-        }
+            TextButton(onClick = onDismiss) { Text("Hủy", color = PrimaryMaroon) }
+        },
+        containerColor = CardBackground
     )
 }

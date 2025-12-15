@@ -37,6 +37,7 @@ private val CardBackground = Color.White
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CartScreen(
+    onBack: () -> Unit,
     onCheckout: () -> Unit,
     onNavigateToProductDetails: (String) -> Unit
 ) {
@@ -80,7 +81,7 @@ fun CartScreen(
             TopAppBar(
                 title = { Text("Giỏ hàng của bạn", color = PrimaryMaroon) },
                 navigationIcon = {
-                    IconButton(onClick = { /* TODO: Quay lại màn hình Home */ }) {
+                    IconButton(onClick = onBack) { // <-- gọi onBack() ở đây
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Quay lại", tint = PrimaryMaroon)
                     }
                 },
@@ -89,6 +90,7 @@ fun CartScreen(
                     titleContentColor = PrimaryMaroon
                 )
             )
+
         },
         bottomBar = {
             if (cartItems.isNotEmpty()) {

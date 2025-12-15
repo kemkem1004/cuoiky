@@ -359,19 +359,23 @@ fun OrderCard(
 
             Spacer(Modifier.height(16.dp))
 
-            // Hiển thị đánh giá + nút sửa/đánh giá
+            // Nếu đã có đánh giá
             if (review != null) {
                 Divider(color = Color.LightGray.copy(alpha = 0.5f))
                 Spacer(Modifier.height(8.dp))
-                Text("Đánh giá của bạn:", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = PrimaryMaroon)
+                Text(
+                    "Đánh giá của bạn:",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = PrimaryMaroon
+                )
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("⭐".repeat(review.rating), style = MaterialTheme.typography.titleMedium.copy(color = GoldStar))
                     Text(" (${review.rating}/5)", style = MaterialTheme.typography.bodyMedium, color = SecondaryDark.copy(alpha = 0.7f))
                 }
-
                 Text(review.comment, style = MaterialTheme.typography.bodyMedium, color = SecondaryDark)
 
+                // Nút sửa đánh giá
                 if (onReviewClick != null) {
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(
@@ -385,24 +389,31 @@ fun OrderCard(
                         Text("SỬA ĐÁNH GIÁ")
                     }
                 }
-            } else if (order.status == "delivered" && onReviewClick != null) {
-                // Chỉ cho phép đánh giá nếu đã giao hàng
-                Button(
-                    onClick = onReviewClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
-                ) {
-                    Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("ĐÁNH GIÁ ĐƠN HÀNG")
+            }
+// Nếu chưa có đánh giá nhưng đơn hàng đã giao
+            else if (order.status == "delivered") {
+                if (onReviewClick != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onReviewClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryMaroon)
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("ĐÁNH GIÁ ĐƠN HÀNG")
+                    }
                 }
-            } else if (order.status == "cancelled") {
+            }
+// Nếu đơn đã hủy
+            else if (order.status == "cancelled") {
                 Text(
                     "Đơn hàng đã hủy. Không thể đánh giá.",
                     style = MaterialTheme.typography.bodySmall,
                     color = StatusCancelled
                 )
             }
+
         }
     }
 }

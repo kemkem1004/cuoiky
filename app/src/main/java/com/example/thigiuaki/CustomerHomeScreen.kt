@@ -48,6 +48,7 @@ sealed class CustomerScreen {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomerTopBar(
+    onBack: () -> Unit,
     onNavigateToWishlist: () -> Unit,
     onNavigateToCheckout: () -> Unit
 ) {
@@ -97,6 +98,7 @@ fun CustomerHomeScreen(
             // Hiển thị TopBar tùy chỉnh chỉ trên màn hình Products
             if (currentScreen == CustomerScreen.Products) {
                 CustomerTopBar(
+                    onBack = { currentScreen = CustomerScreen.Products },
                     onNavigateToWishlist = onNavigateToWishlist,
                     onNavigateToCheckout = onNavigateToCheckout
                 )
@@ -151,9 +153,11 @@ fun CustomerHomeScreen(
                     onNavigateToProductDetails = onNavigateToProductDetails
                 )
                 is CustomerScreen.Cart -> CartScreen(
+                    onBack = { currentScreen = CustomerScreen.Products }, // <-- quay lại Products
                     onCheckout = onNavigateToCheckout,
                     onNavigateToProductDetails = onNavigateToProductDetails
                 )
+
                 is CustomerScreen.Orders -> OrderHistoryScreen()
                 is CustomerScreen.Profile -> ProfileScreen(
                     onLogout = onLogout,
