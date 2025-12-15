@@ -90,6 +90,8 @@ sealed class Screen {
     object Register : Screen()
     object AdminManager : Screen()
     object CustomerHome : Screen()
+    object ForgotPassword : Screen()
+
     data class ProductDetails(val productId: String) : Screen()
     object Cart : Screen()
     object Checkout : Screen()
@@ -163,7 +165,8 @@ fun ThigiuakiApp() {
                             Screen.CustomerHome
                         }
                     },
-                    onBack = { currentScreen = Screen.RoleSelection }
+                    onBack = { currentScreen = Screen.RoleSelection },
+                    onForgotPasswordClick = { currentScreen = Screen.ForgotPassword }
                 )
 
                 is Screen.CustomerLogin -> LoginScreen(
@@ -171,7 +174,8 @@ fun ThigiuakiApp() {
                         currentScreen = Screen.CustomerHome
                     },
                     onBack = { currentScreen = Screen.RoleSelection },
-                    onRegisterClick = { currentScreen = Screen.Register }
+                    onRegisterClick = { currentScreen = Screen.Register },
+                    onForgotPasswordClick = { currentScreen = Screen.ForgotPassword }
                 )
 
                 is Screen.Register -> RegisterScreen(
@@ -264,6 +268,10 @@ fun ThigiuakiApp() {
                     onBack = {
                         currentScreen = Screen.CustomerHome
                     }
+                )
+                is Screen.ForgotPassword -> ForgotPasswordScreen(
+                    onBack = { currentScreen = Screen.CustomerLogin }, // quay về login
+                    onSuccess = { currentScreen = Screen.CustomerLogin } // sau khi gửi mail xong
                 )
 
 

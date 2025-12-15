@@ -27,6 +27,7 @@ private val SecondaryDark = Color(0xFF424242) // Xám đậm (Tiêu đề)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
+    onForgotPasswordClick: () -> Unit,
     onLoginSuccess: (String) -> Unit,
     onBack: () -> Unit,
     onRegisterClick: (() -> Unit)? = null
@@ -166,22 +167,16 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(8.dp))
 
-            // Nút quên mật khẩu (Căn phải)
-            TextButton(onClick = { /* TODO: Implement Forgot Password */ }, modifier = Modifier.align(Alignment.End)) {
+            TextButton(
+                onClick = { onForgotPasswordClick() }, // gọi callback từ AppContent
+                modifier = Modifier.align(Alignment.End)
+            ) {
                 Text(
                     "Quên mật khẩu?",
                     color = PrimaryMaroon.copy(alpha = 0.8f)
                 )
             }
-            Spacer(Modifier.height(24.dp))
 
-            if (errorMessage != null) {
-                Text(
-                    errorMessage!!,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-            }
 
             // Nút Đăng nhập (Primary Button)
             Button(

@@ -223,31 +223,7 @@ fun OrderHistoryScreen() {
                         onClick = {
                             val user = auth.currentUser
                             if (user != null && selectedOrder != null) {
-<<<<<<< HEAD
-                                db.collection("users").document(user.uid).get()
-                                    .addOnSuccessListener { userDoc ->
-                                        val userName = userDoc.getString("name") ?: "Người dùng"
-                                        val reviewData = Review(
-                                            userId = user.uid,
-                                            userName = userName,
-                                            orderId = selectedOrder!!.id,
-                                            comment = reviewText,
-                                            rating = rating,
-                                            createdAt = Timestamp.now(),
-                                            adminReply = null
-                                        )
 
-                                        // Kiểm tra xem đã có đánh giá chưa để cập nhật hoặc thêm mới
-                                        val existingReview = reviews.find { it.orderId == selectedOrder!!.id }
-                                        if (existingReview != null) {
-                                            // Cập nhật
-                                            db.collection("reviews").document(existingReview.id!!)
-                                                .set(reviewData)
-                                        } else {
-                                            // Thêm mới
-                                            db.collection("reviews").add(reviewData)
-                                        }
-=======
 
                                 db.collection("users").document(user.uid).get()
                                     .addOnSuccessListener { userDoc ->
@@ -264,7 +240,7 @@ fun OrderHistoryScreen() {
                                         )
 
                                         db.collection("reviews").add(review)
->>>>>>> 23325b262afeb1d4d24482e8f92d4ac8fab80dc0
+
                                     }
                             }
 
